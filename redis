@@ -1,0 +1,71 @@
+---
+# redis StorageClass
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp2
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2
+
+---
+#redis pvc
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp2
+
+---
+# redis-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  namespace: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:latest
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+
+# redis-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+  type: ClusterIP
