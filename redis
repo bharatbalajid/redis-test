@@ -1,71 +1,35 @@
----
-# redis StorageClass
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: gp2
-provisioner: kubernetes.io/aws-ebs
-parameters:
-  type: gp2
+# Get the path to the user's desktop
+$desktopPath = [System.Environment]::GetFolderPath('Desktop')
 
----
-#redis pvc
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: redis-pvc
-  namespace: redis
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: gp2
+# Prompt user to enter the output file name
+$outputFileName = Read-Host "Enter the filename to save the Kubernetes details (e.g., k8s_details.txt)"
 
----
-# redis-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: redis-deployment
-  namespace: redis
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: redis
-  template:
-    metadata:
-      labels:
-        app: redis
-    spec:
-      containers:
-      - name: redis
-        image: redis:latest
-        ports:
-        - containerPort: 6379
-        volumeMounts:
-        - name: redis-data
-          mountPath: /data
-      volumes:
-      - name: redis-data
-        persistentVolumeClaim:
-          claimName: redis-pvc
+# Ensure the filename ends with .txt
+if (-not $outputFileName.EndsWith(".txt")) {
+    $outputFileName += ".txt"
+}
 
----
+# Combine the desktop path with the file name
+$outputFile = Join-Path -Path $desktopPath -ChildPath $outputFileName
 
-# redis-service.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis-service
-  namespace: redis
-spec:
-  selector:
-    app: redis
-  ports:
-    - protocol: TCP
-      port: 6379
-      targetPort: 6379
-  type: ClusterIP
+# Clear the output file if it already exists
+if (Test-Path $outputFile) {
+    Remove-Item $outputFile
+}
+
+# Get Kubernetes nodes details and append them to the output file
+Write-Output "Fetching Kubernetes Nodes details..." | Out-File -FilePath $outputFile -Append -Encoding utf8
+kubectl get nodes -o wide | Out-File -FilePath $outputFile -Append -Encoding utf8
+Add-Content -Path $outputFile -Value "`n`n"
+
+# Get Kubernetes pods details and append them to the output file
+Write-Output "Fetching Kubernetes Pods details..." | Out-File -FilePath $outputFile -Append -Encoding utf8
+kubectl get pods --all-namespaces -o wide | Out-File -FilePath $outputFile -Append -Encoding utf8
+Add-Content -Path $outputFile -Value "`n`n"
+
+# Get Kubernetes PodDisruptionBudget (PDB) details and append them to the output file
+Write-Output "Fetching Kubernetes PodDisruptionBudget (PDB) details..." | Out-File -FilePath $outputFile -Append -Encoding utf8
+kubectl get pdb --all-namespaces -o wide | Out-File -FilePath $outputFile -Append -Encoding utf8
+Add-Content -Path $outputFile -Value "`n`n"
+
+Write-Output "All details fetched and saved to $outputFile."
